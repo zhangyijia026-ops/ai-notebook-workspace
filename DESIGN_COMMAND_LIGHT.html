@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Notebook - Daylight Command Center</title>
+    <style>
+      :root {
+        --bg: #eef3f8;
+        --paper: #ffffff;
+        --paper-2: #f7fafc;
+        --ink: #0d1726;
+        --muted: #667085;
+        --subtle: #98a2b3;
+        --line: #d8e0eb;
+        --line-soft: #e8eef5;
+        --blue: #1d5eff;
+        --blue-2: #0b3fb3;
+        --cyan: #00a6c8;
+        --lime: #b9ef3f;
+        --orange: #ff8a3d;
+        --danger: #c0392b;
+        --radius: 10px;
+        --shadow: 0 18px 44px rgba(25, 41, 61, 0.1);
+        --shadow-soft: 0 8px 24px rgba(25, 41, 61, 0.07);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(90deg, rgba(13, 23, 38, 0.04) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(13, 23, 38, 0.04) 1px, transparent 1px),
+          var(--bg);
+        background-size: 32px 32px;
+        color: var(--ink);
+        font-family:
+          "Aptos", "Segoe UI", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+          sans-serif;
+      }
+
+      .page {
+        min-height: 100vh;
+        padding: 34px;
+      }
+
+      .frame {
+        max-width: 1440px;
+        margin: 0 auto;
+        border: 1px solid rgba(23, 42, 69, 0.14);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.76);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .app {
+        min-height: 780px;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(29, 94, 255, 0.06), transparent 180px),
+          rgba(255, 255, 255, 0.72);
+        padding: 22px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .brand-mark {
+        position: relative;
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(29, 94, 255, 0.26);
+        border-radius: 12px;
+        background: #f8fbff;
+        color: var(--blue);
+        font-size: 13px;
+        font-weight: 900;
+        box-shadow: inset 0 0 0 3px rgba(29, 94, 255, 0.06);
+      }
+
+      .brand-mark::after {
+        content: "";
+        position: absolute;
+        right: -3px;
+        bottom: -3px;
+        width: 10px;
+        height: 10px;
+        border: 2px solid var(--paper);
+        border-radius: 999px;
+        background: var(--lime);
+      }
+
+      .brand strong {
+        display: block;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .brand span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .nav {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .nav-item {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        color: #344054;
+        padding: 9px 10px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .nav-item i {
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 7px;
+        background: var(--paper-2);
+        color: var(--muted);
+        font-style: normal;
+        font-size: 12px;
+      }
+
+      .nav-item small {
+        color: var(--subtle);
+        font-size: 11px;
+      }
+
+      .nav-item.active {
+        border-color: rgba(29, 94, 255, 0.2);
+        background: linear-gradient(90deg, rgba(29, 94, 255, 0.1), rgba(0, 166, 200, 0.06));
+        color: var(--blue-2);
+      }
+
+      .nav-item.active i {
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .side-block {
+        margin-top: 28px;
+        border: 1px solid var(--line-soft);
+        border-radius: 14px;
+        background: rgba(247, 250, 252, 0.84);
+        padding: 14px;
+      }
+
+      .side-block strong {
+        display: block;
+        font-size: 12px;
+      }
+
+      .side-block p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .main {
+        min-width: 0;
+        padding: 24px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 20px;
+        align-items: start;
+        margin-bottom: 18px;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .kicker::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--lime);
+      }
+
+      h1 {
+        margin: 7px 0 0;
+        font-size: 32px;
+        line-height: 1.14;
+        letter-spacing: 0;
+      }
+
+      .top-actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .btn {
+        min-height: 38px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        color: #344054;
+        padding: 8px 12px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .btn.primary {
+        border-color: var(--blue);
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .command-bar {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid rgba(29, 94, 255, 0.22);
+        border-radius: 16px;
+        background: linear-gradient(180deg, #ffffff, #f8fbff);
+        box-shadow: var(--shadow-soft);
+        padding: 12px;
+        margin-bottom: 16px;
+      }
+
+      .command-icon {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        background: var(--blue);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 900;
+      }
+
+      .command-copy strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .command-copy span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .command-shortcut {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-2);
+        color: var(--muted);
+        padding: 5px 8px;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+        gap: 16px;
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--line-soft);
+        padding: 14px 16px;
+      }
+
+      .card-head strong {
+        font-size: 14px;
+      }
+
+      .card-head span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .capture {
+        padding: 14px;
+      }
+
+      .capture-box {
+        min-height: 108px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background:
+          linear-gradient(90deg, rgba(29, 94, 255, 0.04), transparent),
+          var(--paper-2);
+        color: var(--muted);
+        padding: 13px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .capture-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .segmented {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper-2);
+        padding: 3px;
+      }
+
+      .segmented span {
+        border-radius: 7px;
+        padding: 6px 9px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .segmented .active {
+        background: var(--paper);
+        color: var(--blue);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.86);
+        padding: 14px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 25px;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .task-list {
+        padding: 8px;
+      }
+
+      .task {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        border-radius: 12px;
+        padding: 10px;
+      }
+
+      .task + .task {
+        border-top: 1px solid var(--line-soft);
+      }
+
+      .check {
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+      }
+
+      .task strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .task span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .priority {
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .priority.high {
+        background: #fff1ed;
+        color: var(--danger);
+      }
+
+      .priority.mid {
+        background: #fff7e8;
+        color: #b54708;
+      }
+
+      .editor {
+        min-height: 560px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .editor-toolbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--line-soft);
+        padding: 13px 15px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper-2);
+        color: var(--muted);
+        padding: 6px 9px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .editor-body {
+        flex: 1;
+        padding: 20px;
+      }
+
+      .editor-title {
+        max-width: 620px;
+        margin-bottom: 16px;
+        font-size: 28px;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      .ai-summary {
+        border: 1px solid rgba(29, 94, 255, 0.18);
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(29, 94, 255, 0.06), rgba(0, 166, 200, 0.04));
+        padding: 14px;
+        margin-bottom: 18px;
+      }
+
+      .ai-summary strong {
+        display: block;
+        color: var(--blue-2);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .ai-summary p {
+        margin: 8px 0 0;
+        color: #344054;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      .doc {
+        color: #263244;
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      .doc h4 {
+        margin: 16px 0 6px;
+        font-size: 14px;
+      }
+
+      .inbox-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .clip {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.82);
+        padding: 12px;
+      }
+
+      .clip strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .clip span {
+        display: -webkit-box;
+        overflow: hidden;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+
+      .accent-line {
+        height: 3px;
+        background: linear-gradient(90deg, var(--blue), var(--cyan), var(--lime));
+      }
+
+      @media (max-width: 980px) {
+        .page {
+          padding: 16px;
+        }
+
+        .app,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .metrics,
+        .inbox-strip {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .topbar,
+        .capture-actions,
+        .editor-toolbar {
+          grid-template-columns: 1fr;
+          flex-direction: column;
+        }
+
+        .metrics,
+        .inbox-strip {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="frame">
+        <div class="accent-line"></div>
+        <section class="app">
+          <aside class="sidebar">
+            <div class="brand">
+              <div class="brand-mark">AI</div>
+              <div>
+                <strong>AI 笔记本</strong>
+                <span>Daylight Command</span>
+              </div>
+            </div>
+
+            <nav class="nav">
+              <div class="nav-item active"><i>⌘</i><span>工作台</span><small>12</small></div>
+              <div class="nav-item"><i>N</i><span>笔记本</span><small>28</small></div>
+              <div class="nav-item"><i>T</i><span>Todo</span><small>7</small></div>
+              <div class="nav-item"><i>I</i><span>收集箱</span><small>5</small></div>
+              <div class="nav-item"><i>R</i><span>AI 助手</span><small></small></div>
+              <div class="nav-item"><i>S</i><span>搜索</span><small></small></div>
+            </nav>
+
+            <div class="side-block">
+              <strong>今日系统状态</strong>
+              <p>已同步 3 条 Todo、2 条摘录和 1 篇报告草稿。建议先处理高优先级任务。</p>
+            </div>
+          </aside>
+
+          <section class="main">
+            <header class="topbar">
+              <div>
+                <div class="kicker">Milestone Interface</div>
+                <h1>Capture everything. Command what matters.</h1>
+              </div>
+              <div class="top-actions">
+                <button class="btn">搜索</button>
+                <button class="btn primary">生成日报</button>
+              </div>
+            </header>
+
+            <section class="command-bar">
+              <div class="command-icon">⌘</div>
+              <div class="command-copy">
+                <strong>快速记录 / AI 分类 / 生成 Todo</strong>
+                <span>粘贴小红书笔记、AI 对话、工作消息，系统会进入整理队列。</span>
+              </div>
+              <div class="command-shortcut">⌘ K</div>
+            </section>
+
+            <section class="grid">
+              <div class="stack">
+                <div class="card capture">
+                  <div class="capture-box">
+                    记录一个想法：把今天小红书看到的“选题钩子”整理成工作复盘模板，并提取 3 个可执行 Todo...
+                  </div>
+                  <div class="capture-actions">
+                    <div class="segmented">
+                      <span class="active">笔记</span>
+                      <span>Todo</span>
+                      <span>摘录</span>
+                    </div>
+                    <button class="btn primary">保存</button>
+                  </div>
+                </div>
+
+                <div class="metrics">
+                  <div class="metric"><strong>7</strong><span>未完成 Todo</span></div>
+                  <div class="metric"><strong>3</strong><span>今日任务</span></div>
+                  <div class="metric"><strong>28</strong><span>笔记</span></div>
+                  <div class="metric"><strong>5</strong><span>待整理摘录</span></div>
+                </div>
+
+                <div class="card">
+                  <div class="card-head">
+                    <strong>今日任务</strong>
+                    <span>来自笔记和手动添加</span>
+                  </div>
+                  <div class="task-list">
+                    <div class="task">
+                      <div class="check"></div>
+                      <div>
+                        <strong>整理产品方案结构</strong>
+                        <span>来源：今日工作记录 · 截止 2026-05-27</span>
+                      </div>
+                      <span class="priority high">高</span>
+                    </div>
+                    <div class="task">
+                      <div class="check"></div>
+                      <div>
+                        <strong>复盘小红书选题表达</strong>
+                        <span>来源：小红书灵感 · 未设置日期</span>
+                      </div>
+                      <span class="priority mid">中</span>
+                    </div>
+                    <div class="task">
+                      <div class="check"></div>
+                      <div>
+                        <strong>生成本周周报草稿</strong>
+                        <span>来源：AI 助手 · 可立即执行</span>
+                      </div>
+                      <span class="priority mid">中</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stack">
+                <article class="card editor">
+                  <div class="editor-toolbar">
+                    <span class="pill">小红书灵感</span>
+                    <div>
+                      <span class="pill">AI 总结</span>
+                      <span class="pill">提取 Todo</span>
+                    </div>
+                  </div>
+                  <div class="editor-body">
+                    <div class="editor-title">内容灵感：把社媒摘录转成工作行动</div>
+                    <div class="ai-summary">
+                      <strong>AI Interpretation</strong>
+                      <p>
+                        这条摘录的价值在于把“用户痛点 + 场景表达 + 选题钩子”转化为可复用模板。建议归档到小红书灵感，并生成后续复盘任务。
+                      </p>
+                    </div>
+                    <div class="doc">
+                      <h4># 我的补充</h4>
+                      可以把这个结构复用到工作日报里：先写观察，再写判断，最后给出下一步行动。
+                      <h4># Markdown Todo</h4>
+                      - [ ] [高] [2026-05-27] 整理产品方案结构<br />
+                      - [ ] [中] 复盘小红书表达方式
+                    </div>
+                  </div>
+                </article>
+
+                <div class="inbox-strip">
+                  <div class="clip">
+                    <strong>小红书</strong>
+                    <span>适合拆解为标题角度、用户痛点和内容结构。</span>
+                  </div>
+                  <div class="clip">
+                    <strong>AI 聊天</strong>
+                    <span>一段可以转化为产品方案的推理链路。</span>
+                  </div>
+                  <div class="clip">
+                    <strong>飞书</strong>
+                    <span>工作消息中包含两个后续跟进事项。</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </section>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
