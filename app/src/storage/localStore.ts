@@ -17,13 +17,20 @@ export function loadAppData(): AppData {
   try {
     const parsedData = JSON.parse(storedValue) as Partial<AppData>
 
-    return {
-      ...defaultAppData,
-      ...parsedData,
-      projects: parsedData.projects ?? defaultAppData.projects,
-    }
+    return normalizeAppData(parsedData)
   } catch {
     return defaultAppData
+  }
+}
+
+export function normalizeAppData(data: Partial<AppData>): AppData {
+  return {
+    ...defaultAppData,
+    ...data,
+    notebooks: data.notebooks ?? defaultAppData.notebooks,
+    notes: data.notes ?? defaultAppData.notes,
+    todos: data.todos ?? defaultAppData.todos,
+    clips: data.clips ?? defaultAppData.clips,
   }
 }
 

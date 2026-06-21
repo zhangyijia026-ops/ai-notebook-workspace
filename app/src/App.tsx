@@ -10,23 +10,20 @@ import {
   signUpWithEmail,
   type CloudSyncState,
 } from './services/cloudSync'
-import { getStorageKey, loadAppData, saveAppData } from './storage/localStore'
-import type { AppData, Clip, ClipSource, Note, Notebook, Project, Todo, TodoPriority, TodoStatus } from './types/domain'
+import { getStorageKey, loadAppData, normalizeAppData, saveAppData } from './storage/localStore'
+import type { AppData, Clip, ClipSource, Note, Notebook, Todo, TodoPriority, TodoStatus } from './types/domain'
 import './App.css'
 
 type PageKey = 'dashboard' | 'notes' | 'todos' | 'inbox' | 'assistant' | 'search'
 type TodoFilter = 'today' | 'pending' | 'completed' | 'overdue' | 'from_notes' | 'all'
-type ProjectFilter = 'all' | 'none' | string
 type ClipSourceFilter = ClipSource | 'all'
 type QuickCaptureType = 'note' | 'todo' | 'clip'
 type ReportType = 'daily' | 'weekly'
-type ReportProjectMode = 'all' | 'current' | 'selected' | 'none'
 type ClipAiDraft = {
   title: string
   summary: string
   tagsText: string
   recommendedNotebookId: string
-  todosText: string
 }
 type SearchResult =
   | {
@@ -220,7 +217,12 @@ function parseMarkdownTodos(content: string): ParsedMarkdownTodo[] {
     .filter((todo): todo is ParsedMarkdownTodo => Boolean(todo))
 }
 
-function syncNoteTodos(todos: Todo[], noteId: string, content: string, timestamp: string, projectId?: string) {
+function syncNoteTodos(
+  todos: Todo[],
+  noteId: string,
+  content: string,
+  timestamp: string,
+) {
   const parsedTodos = parseMarkdownTodos(content)
   const parsedLineKeys = new Set(parsedTodos.map((todo) => todo.lineKey))
   const existingNoteTodos = todos.filter((todo) => todo.sourceNoteId === noteId && todo.sourceNoteLineKey)
@@ -250,7 +252,6 @@ function syncNoteTodos(todos: Todo[], noteId: string, content: string, timestamp
       title: parsedTodo.title,
       status: parsedTodo.status,
       priority: parsedTodo.priority,
-      projectId,
       dueDate: parsedTodo.dueDate,
       completedAt: parsedTodo.status === 'completed' ? todo.completedAt ?? timestamp : undefined,
     }
@@ -263,7 +264,6 @@ function syncNoteTodos(todos: Todo[], noteId: string, content: string, timestamp
       title: parsedTodo.title,
       status: parsedTodo.status,
       priority: parsedTodo.priority,
-      projectId,
       dueDate: parsedTodo.dueDate,
       sourceNoteId: noteId,
       sourceNoteLineKey: parsedTodo.lineKey,
@@ -289,8 +289,6 @@ function App() {
   const [newTodoPriority, setNewTodoPriority] = useState<TodoPriority>('medium')
   const [newTodoDueDate, setNewTodoDueDate] = useState(() => getTodayDateValue())
   const [newTodoSourceNoteId, setNewTodoSourceNoteId] = useState('')
-  const [newTodoProjectId, setNewTodoProjectId] = useState('')
-  const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all')
   const [clipContent, setClipContent] = useState('')
   const [clipSource, setClipSource] = useState<ClipSource>('xiaohongshu')
   const [clipSourceUrl, setClipSourceUrl] = useState('')
@@ -303,8 +301,6 @@ function App() {
   const [reportType, setReportType] = useState<ReportType>('daily')
   const [reportTitle, setReportTitle] = useState('')
   const [reportContent, setReportContent] = useState('')
-  const [reportProjectMode, setReportProjectMode] = useState<ReportProjectMode>('all')
-  const [selectedReportProjectIds, setSelectedReportProjectIds] = useState<string[]>([])
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [cloudSyncState, setCloudSyncState] = useState<CloudSyncState>({ configured: false, user: null })
@@ -343,34 +339,12 @@ function App() {
   }, [])
 
   const activeNotebook = appData.notebooks.find((notebook) => notebook.id === activeNotebookId)
-  const activeProject = projectFilter !== 'all' && projectFilter !== 'none'
-    ? appData.projects.find((project) => project.id === projectFilter)
-    : null
   const notesInActiveNotebook = appData.notes
     .filter((note) => note.notebookId === activeNotebookId)
-    .filter((note) => {
-      if (projectFilter === 'all') {
-        return true
-      }
-
-      if (projectFilter === 'none') {
-        return !note.projectId
-      }
-
-      return note.projectId === projectFilter
-    })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const activeNote = appData.notes.find((note) => note.id === activeNoteId) ?? null
   const filteredTodos = appData.todos
     .filter((todo) => {
-      if (projectFilter === 'none' && todo.projectId) {
-        return false
-      }
-
-      if (projectFilter !== 'all' && projectFilter !== 'none' && todo.projectId !== projectFilter) {
-        return false
-      }
-
       if (todoFilter === 'today') {
         return todo.dueDate === getTodayDateValue()
       }
@@ -423,17 +397,6 @@ function App() {
   }
   const filteredClips = appData.clips
     .filter((clip) => clipFilter === 'all' || clip.source === clipFilter)
-    .filter((clip) => {
-      if (projectFilter === 'all') {
-        return true
-      }
-
-      if (projectFilter === 'none') {
-        return !clip.projectId
-      }
-
-      return clip.projectId === projectFilter
-    })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const todayTodos = appData.todos
     .filter((todo) => todo.dueDate === getTodayDateValue() || (todo.status === 'pending' && !todo.dueDate))
@@ -608,9 +571,10 @@ function App() {
         return
       }
 
-      setAppData(cloudRow.data)
-      setActiveNotebookId(cloudRow.data.notebooks[0]?.id ?? '')
-      setActiveNoteId(cloudRow.data.notes[0]?.id ?? null)
+      const normalizedData = normalizeAppData(cloudRow.data)
+      setAppData(normalizedData)
+      setActiveNotebookId(normalizedData.notebooks[0]?.id ?? '')
+      setActiveNoteId(normalizedData.notes[0]?.id ?? null)
       setCloudStatus(`已从云端恢复数据：${new Date(cloudRow.updated_at).toLocaleString('zh-CN')}`)
     } catch (error) {
       setCloudStatus(error instanceof Error ? error.message : '从云端拉取失败。')
@@ -722,73 +686,6 @@ function App() {
     }
   }
 
-  function handleCreateProject() {
-    const name = window.prompt('请输入项目名称', '新项目')
-    const trimmedName = name?.trim()
-
-    if (!trimmedName) {
-      return
-    }
-
-    const timestamp = getTimestamp()
-    const project: Project = {
-      id: createId('project'),
-      name: trimmedName,
-      description: '',
-      status: 'active',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }
-
-    updateData((current) => ({
-      ...current,
-      projects: [project, ...current.projects],
-    }))
-    setProjectFilter(project.id)
-    setNewTodoProjectId(project.id)
-  }
-
-  function handleRenameProject(project: Project) {
-    const name = window.prompt('请输入新的项目名称', project.name)
-    const trimmedName = name?.trim()
-
-    if (!trimmedName || trimmedName === project.name) {
-      return
-    }
-
-    const timestamp = getTimestamp()
-
-    updateData((current) => ({
-      ...current,
-      projects: current.projects.map((item) =>
-        item.id === project.id
-          ? {
-              ...item,
-              name: trimmedName,
-              updatedAt: timestamp,
-            }
-          : item,
-      ),
-    }))
-  }
-
-  function handleArchiveProject(project: Project) {
-    const timestamp = getTimestamp()
-
-    updateData((current) => ({
-      ...current,
-      projects: current.projects.map((item) =>
-        item.id === project.id
-          ? {
-              ...item,
-              status: item.status === 'archived' ? 'active' : 'archived',
-              updatedAt: timestamp,
-            }
-          : item,
-      ),
-    }))
-  }
-
   function handleCreateNote() {
     const timestamp = getTimestamp()
     const notebookId = activeNotebookId || appData.notebooks[0]?.id
@@ -800,7 +697,6 @@ function App() {
     const note: Note = {
       id: createId('note'),
       notebookId,
-      projectId: projectFilter !== 'all' && projectFilter !== 'none' ? projectFilter : undefined,
       title: '未命名笔记',
       content: '',
       tags: [],
@@ -816,7 +712,7 @@ function App() {
     setActiveNoteId(note.id)
   }
 
-  function handleUpdateNote(noteId: string, fields: Partial<Pick<Note, 'title' | 'content' | 'notebookId' | 'projectId'>>) {
+  function handleUpdateNote(noteId: string, fields: Partial<Pick<Note, 'title' | 'content' | 'notebookId'>>) {
     const timestamp = getTimestamp()
 
     updateData((current) => ({
@@ -832,21 +728,8 @@ function App() {
       ),
       todos:
         typeof fields.content === 'string'
-          ? syncNoteTodos(
-              current.todos,
-              noteId,
-              fields.content,
-              timestamp,
-              current.notes.find((note) => note.id === noteId)?.projectId,
-            )
-          : current.todos.map((todo) =>
-              todo.sourceNoteId === noteId && fields.projectId !== undefined
-                ? {
-                    ...todo,
-                    projectId: fields.projectId || undefined,
-                  }
-                : todo,
-            ),
+          ? syncNoteTodos(current.todos, noteId, fields.content, timestamp)
+          : current.todos,
     }))
 
     if (fields.notebookId) {
@@ -867,11 +750,6 @@ function App() {
       const result = await organizeContent(sourceText, 'manual')
       const timestamp = getTimestamp()
       const title = (result.title || buildFallbackTitle(sourceText)).trim()
-      const extractedTodos = result.extractedTodos
-        .map((todo) => todo.trim())
-        .filter(Boolean)
-        .slice(0, 8)
-
       updateData((current) => ({
         ...current,
         notes: current.notes.map((item) =>
@@ -882,23 +760,10 @@ function App() {
                 summary: result.summary,
                 tags: result.tags,
                 notebookId: result.recommendedNotebookId || item.notebookId,
-                projectId: item.projectId,
                 updatedAt: timestamp,
               }
             : item,
         ),
-        todos: [
-          ...extractedTodos.map<Todo>((title) => ({
-            id: createId('todo'),
-            title,
-            status: 'pending',
-            priority: 'medium',
-            projectId: note.projectId,
-            sourceNoteId: note.id,
-            createdAt: timestamp,
-          })),
-          ...current.todos,
-        ],
       }))
 
       if (result.recommendedNotebookId) {
@@ -949,7 +814,6 @@ function App() {
       title: trimmedTitle,
       status: 'pending',
       priority: newTodoPriority,
-      projectId: newTodoProjectId || undefined,
       dueDate: newTodoDueDate || undefined,
       sourceNoteId: newTodoSourceNoteId || undefined,
       createdAt: timestamp,
@@ -963,7 +827,6 @@ function App() {
     setNewTodoTitle('')
     setNewTodoDueDate(getTodayDateValue())
     setNewTodoSourceNoteId('')
-    setNewTodoProjectId(projectFilter !== 'all' && projectFilter !== 'none' ? projectFilter : '')
     setNewTodoPriority('medium')
   }
 
@@ -982,7 +845,6 @@ function App() {
         title: trimmedText,
         status: 'pending',
         priority: 'medium',
-        projectId: projectFilter !== 'all' && projectFilter !== 'none' ? projectFilter : undefined,
         dueDate: getTodayDateValue(),
         createdAt: timestamp,
       }
@@ -998,7 +860,6 @@ function App() {
       const note: Note = {
         id: createId('note'),
         notebookId,
-        projectId: projectFilter !== 'all' && projectFilter !== 'none' ? projectFilter : undefined,
         title: trimmedText.slice(0, 30) || '快速记录',
         content: trimmedText,
         tags: [],
@@ -1018,7 +879,6 @@ function App() {
       const clip: Clip = {
         id: createId('clip'),
         source: 'manual',
-        projectId: projectFilter !== 'all' && projectFilter !== 'none' ? projectFilter : undefined,
         rawContent: trimmedText,
         tags: [],
         createdAt: timestamp,
@@ -1082,7 +942,7 @@ function App() {
 
   function handleUpdateTodo(
     todoId: string,
-    fields: Partial<Pick<Todo, 'title' | 'priority' | 'dueDate' | 'sourceNoteId' | 'projectId'>>,
+    fields: Partial<Pick<Todo, 'title' | 'priority' | 'dueDate' | 'sourceNoteId'>>,
   ) {
     updateData((current) => ({
       ...current,
@@ -1093,7 +953,6 @@ function App() {
               ...fields,
               dueDate: fields.dueDate === '' ? undefined : fields.dueDate ?? todo.dueDate,
               sourceNoteId: fields.sourceNoteId === '' ? undefined : fields.sourceNoteId ?? todo.sourceNoteId,
-              projectId: fields.projectId === '' ? undefined : fields.projectId ?? todo.projectId,
             }
           : todo,
       ),
@@ -1137,7 +996,6 @@ function App() {
       id: createId('clip'),
       source: clipSource,
       sourceUrl: clipSourceUrl.trim() || undefined,
-      projectId: projectFilter !== 'all' && projectFilter !== 'none' ? projectFilter : undefined,
       rawContent: trimmedContent,
       tags: [],
       createdAt: timestamp,
@@ -1166,7 +1024,6 @@ function App() {
           summary: result.summary,
           tagsText: result.tags.join('、'),
           recommendedNotebookId: result.recommendedNotebookId || clip.recommendedNotebookId || 'notebook_unsorted',
-          todosText: result.extractedTodos.join('\n'),
         },
       }))
     } finally {
@@ -1200,14 +1057,6 @@ function App() {
       .slice(0, 8)
   }
 
-  function parseDraftTodos(todosText: string) {
-    return todosText
-      .split('\n')
-      .map((todo) => todo.trim().replace(/^[-*]\s*/, '').replace(/^\d+[.)、]\s*/, ''))
-      .filter(Boolean)
-      .slice(0, 8)
-  }
-
   function handleApplyClipAiDraft(clip: Clip) {
     const draft = clipAiDrafts[clip.id]
 
@@ -1217,7 +1066,6 @@ function App() {
 
     const timestamp = getTimestamp()
     const tags = parseDraftTags(draft.tagsText)
-    const extractedTodos = parseDraftTodos(draft.todosText)
 
     updateData((current) => ({
       ...current,
@@ -1233,18 +1081,6 @@ function App() {
             }
           : item,
       ),
-      todos: [
-        ...extractedTodos.map<Todo>((title) => ({
-          id: createId('todo'),
-          title,
-          status: 'pending',
-          priority: 'medium',
-          projectId: clip.projectId,
-          sourceClipId: clip.id,
-          createdAt: timestamp,
-        })),
-        ...current.todos,
-      ],
     }))
 
     setClipAiDrafts((current) => {
@@ -1315,7 +1151,6 @@ function App() {
       content: contentParts.join('\n\n'),
       summary: clip.summary,
       tags: clip.tags,
-      projectId: clip.projectId,
       createdAt: timestamp,
       updatedAt: timestamp,
     }
@@ -1330,115 +1165,32 @@ function App() {
     setActiveNoteId(note.id)
   }
 
-  function getReportProjectScopes() {
-    if (reportProjectMode === 'none') {
-      return [{ id: undefined, name: '无项目' }]
-    }
-
-    if (reportProjectMode === 'current') {
-      if (projectFilter === 'none') {
-        return [{ id: undefined, name: '无项目' }]
-      }
-
-      if (projectFilter !== 'all') {
-        const project = appData.projects.find((item) => item.id === projectFilter)
-        return project ? [{ id: project.id, name: project.name }] : []
-      }
-    }
-
-    if (reportProjectMode === 'selected') {
-      return appData.projects
-        .filter((project) => selectedReportProjectIds.includes(project.id))
-        .map((project) => ({ id: project.id, name: project.name }))
-    }
-
-    return [
-      ...appData.projects.map((project) => ({ id: project.id, name: project.name })),
-      { id: undefined, name: '无项目' },
-    ]
-  }
-
-  function matchesProjectScope(projectId: string | undefined, scopeId: string | undefined) {
-    return scopeId ? projectId === scopeId : !projectId
-  }
-
   async function handleGenerateReport(type: ReportType) {
     setIsGeneratingReport(true)
     setReportType(type)
 
     try {
-      const projectScopes = getReportProjectScopes()
-      const scopedTodos = appData.todos.filter((todo) =>
-        reportProjectMode === 'all'
-          ? true
-          : projectScopes.some((scope) => matchesProjectScope(todo.projectId, scope.id)),
-      )
-      const scopedNotes = appData.notes.filter((note) =>
-        reportProjectMode === 'all'
-          ? true
-          : projectScopes.some((scope) => matchesProjectScope(note.projectId, scope.id)),
-      )
-      const scopedClips = appData.clips.filter((clip) =>
-        reportProjectMode === 'all'
-          ? true
-          : projectScopes.some((scope) => matchesProjectScope(clip.projectId, scope.id)),
-      )
-      const completedTodos = scopedTodos
+      const completedTodos = appData.todos
         .filter((todo) => todo.status === 'completed')
         .slice(0, type === 'daily' ? 8 : 20)
         .map((todo) => todo.title)
-      const pendingTodos = scopedTodos
+      const pendingTodos = appData.todos
         .filter((todo) => todo.status === 'pending')
         .slice(0, type === 'daily' ? 8 : 20)
         .map((todo) => todo.title)
-      const noteHighlights = [...scopedNotes]
+      const noteHighlights = [...appData.notes]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, type === 'daily' ? 5 : 12)
         .map((note) => note.summary || note.title || note.content.slice(0, 80))
-      const clipHighlights = [...scopedClips]
+      const clipHighlights = [...appData.clips]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, type === 'daily' ? 5 : 12)
         .map((clip) => clip.summary || clip.rawContent.slice(0, 80))
-      const projectReports = projectScopes
-        .map((scope) => {
-          const scopeTodos = appData.todos.filter((todo) => matchesProjectScope(todo.projectId, scope.id))
-          const scopeNotes = appData.notes.filter((note) => matchesProjectScope(note.projectId, scope.id))
-          const scopeClips = appData.clips.filter((clip) => matchesProjectScope(clip.projectId, scope.id))
-
-          return {
-            projectName: scope.name,
-            completedTodos: scopeTodos
-              .filter((todo) => todo.status === 'completed')
-              .slice(0, type === 'daily' ? 6 : 12)
-              .map((todo) => todo.title),
-            pendingTodos: scopeTodos
-              .filter((todo) => todo.status === 'pending')
-              .slice(0, type === 'daily' ? 6 : 12)
-              .map((todo) => todo.title),
-            noteHighlights: scopeNotes
-              .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-              .slice(0, type === 'daily' ? 4 : 8)
-              .map((note) => note.summary || note.title || note.content.slice(0, 80)),
-            clipHighlights: scopeClips
-              .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-              .slice(0, type === 'daily' ? 4 : 8)
-              .map((clip) => clip.summary || clip.rawContent.slice(0, 80)),
-          }
-        })
-        .filter(
-          (scope) =>
-            scope.completedTodos.length > 0 ||
-            scope.pendingTodos.length > 0 ||
-            scope.noteHighlights.length > 0 ||
-            scope.clipHighlights.length > 0,
-        )
-
       const result = await generateReport(type, {
         completedTodos,
         pendingTodos,
         noteHighlights,
         clipHighlights,
-        projectReports,
       })
 
       setReportTitle(result.title)
@@ -1526,9 +1278,10 @@ function App() {
           return
         }
 
-        setAppData(importedData)
-        setActiveNotebookId(importedData.notebooks[0]?.id ?? '')
-        setActiveNoteId(importedData.notes[0]?.id ?? null)
+        const normalizedData = normalizeAppData(importedData)
+        setAppData(normalizedData)
+        setActiveNotebookId(normalizedData.notebooks[0]?.id ?? '')
+        setActiveNoteId(normalizedData.notes[0]?.id ?? null)
         window.alert('导入完成，数据已恢复到当前浏览器。')
       } catch {
         window.alert('导入失败：无法解析这个 JSON 文件。')
@@ -1732,38 +1485,6 @@ function App() {
           </section>
         ) : activePage === 'notes' ? (
           <section className="notes-page-layout">
-            <section className="project-strip" aria-label="项目筛选">
-              <div>
-                <strong>项目</strong>
-                <span>{activeProject?.name ?? (projectFilter === 'none' ? '无项目' : '全部项目')}</span>
-              </div>
-              <div className="project-actions">
-                <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-                  <option value="all">全部项目</option>
-                  <option value="none">无项目</option>
-                  {appData.projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.status === 'archived' ? '已归档 · ' : ''}
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" onClick={handleCreateProject}>
-                  新建项目
-                </button>
-                {activeProject ? (
-                  <>
-                    <button type="button" onClick={() => handleRenameProject(activeProject)}>
-                      重命名项目
-                    </button>
-                    <button type="button" onClick={() => handleArchiveProject(activeProject)}>
-                      {activeProject.status === 'archived' ? '恢复项目' : '归档项目'}
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </section>
-
           <section className="notes-layout">
             <aside className="notebook-pane" aria-label="笔记本列表">
               <div className="pane-header">
@@ -1886,18 +1607,6 @@ function App() {
                         </option>
                       ))}
                     </select>
-                    <select
-                      value={activeNote.projectId ?? ''}
-                      onChange={(event) => handleUpdateNote(activeNote.id, { projectId: event.target.value })}
-                    >
-                      <option value="">无项目</option>
-                      {appData.projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.status === 'archived' ? '已归档 · ' : ''}
-                          {project.name}
-                        </option>
-                      ))}
-                    </select>
                     <div className="editor-toolbar-actions">
                       <button
                         type="button"
@@ -1941,7 +1650,7 @@ function App() {
                   />
                   <div className="markdown-hint">
                     <span>Todo 写法：</span>
-                    <code>- [ ] [高] [2026-05-27] 整理项目方案</code>
+                    <code>- [ ] [高] [2026-05-27] 整理会议纪要</code>
                     <code>- [ ] [中] 跟进用户反馈</code>
                     <code>- [x] [低] [2026-05-26] 归档会议纪要</code>
                     <span>优先级和截止日期都可省略；不写优先级时默认中优先级。</span>
@@ -1965,34 +1674,6 @@ function App() {
           </section>
         ) : activePage === 'todos' ? (
           <section className="todo-layout">
-            <section className="project-strip" aria-label="项目筛选">
-              <div>
-                <strong>项目</strong>
-                <span>{activeProject?.name ?? (projectFilter === 'none' ? '无项目' : '全部项目')}</span>
-              </div>
-              <div className="project-actions">
-                <select
-                  value={projectFilter}
-                  onChange={(event) => {
-                    setProjectFilter(event.target.value)
-                    setNewTodoProjectId(event.target.value !== 'all' && event.target.value !== 'none' ? event.target.value : '')
-                  }}
-                >
-                  <option value="all">全部项目</option>
-                  <option value="none">无项目</option>
-                  {appData.projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.status === 'archived' ? '已归档 · ' : ''}
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" onClick={handleCreateProject}>
-                  新建项目
-                </button>
-              </div>
-            </section>
-
             <form
               className="todo-composer"
               onSubmit={(event) => {
@@ -2028,18 +1709,6 @@ function App() {
                     value={newTodoDueDate}
                     onChange={(event) => setNewTodoDueDate(event.target.value)}
                   />
-                </label>
-                <label>
-                  项目
-                  <select value={newTodoProjectId} onChange={(event) => setNewTodoProjectId(event.target.value)}>
-                    <option value="">无项目</option>
-                    {appData.projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.status === 'archived' ? '已归档 · ' : ''}
-                        {project.name}
-                      </option>
-                    ))}
-                  </select>
                 </label>
                 <label>
                   关联笔记
@@ -2092,7 +1761,6 @@ function App() {
                       const sourceNote = todo.sourceNoteId
                         ? appData.notes.find((note) => note.id === todo.sourceNoteId)
                         : null
-                      const todoProject = todo.projectId ? appData.projects.find((project) => project.id === todo.projectId) : null
 
                       return (
                         <article
@@ -2145,21 +1813,6 @@ function App() {
                               />
                             </label>
                             <label>
-                              项目
-                              <select
-                                value={todo.projectId ?? ''}
-                                onChange={(event) => handleUpdateTodo(todo.id, { projectId: event.target.value })}
-                              >
-                                <option value="">无项目</option>
-                                {appData.projects.map((project) => (
-                                  <option key={project.id} value={project.id}>
-                                    {project.status === 'archived' ? '已归档 · ' : ''}
-                                    {project.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
                               来源
                               <select
                                 value={todo.sourceNoteId ?? ''}
@@ -2184,7 +1837,6 @@ function App() {
                             ) : (
                               <span>未设置截止日期</span>
                             )}
-                            <span>项目：{todoProject?.name ?? '无项目'}</span>
                             {sourceNote ? (
                               <button type="button" onClick={() => handleOpenSourceNote(sourceNote.id)}>
                                 打开来源笔记：{sourceNote.title || '未命名笔记'}
@@ -2383,15 +2035,6 @@ function App() {
                                 </label>
                               </div>
 
-                              <label>
-                                提取 Todo
-                                <textarea
-                                  value={aiDraft.todosText}
-                                  onChange={(event) => handleUpdateClipAiDraft(clip.id, { todosText: event.target.value })}
-                                  placeholder="每行一条 Todo；不需要创建 Todo 时留空"
-                                />
-                              </label>
-
                               <div className="clip-actions">
                                 <button type="button" onClick={() => handleApplyClipAiDraft(clip)}>
                                   采纳并写入
@@ -2434,40 +2077,6 @@ function App() {
               <div>
                 <strong>生成报告</strong>
                 <p>基于当前 Todo、笔记和摘录生成可编辑的日报/周报草稿。</p>
-              </div>
-              <div className="report-project-controls">
-                <label>
-                  项目范围
-                  <select
-                    value={reportProjectMode}
-                    onChange={(event) => setReportProjectMode(event.target.value as ReportProjectMode)}
-                  >
-                    <option value="all">全部项目</option>
-                    <option value="current">当前筛选项目</option>
-                    <option value="selected">选择多个项目</option>
-                    <option value="none">无项目</option>
-                  </select>
-                </label>
-                {reportProjectMode === 'selected' ? (
-                  <div className="report-project-checkboxes">
-                    {appData.projects.map((project) => (
-                      <label key={project.id}>
-                        <input
-                          type="checkbox"
-                          checked={selectedReportProjectIds.includes(project.id)}
-                          onChange={(event) => {
-                            setSelectedReportProjectIds((current) =>
-                              event.target.checked
-                                ? [...current, project.id]
-                                : current.filter((projectId) => projectId !== project.id),
-                            )
-                          }}
-                        />
-                        {project.name}
-                      </label>
-                    ))}
-                  </div>
-                ) : null}
               </div>
               <div className="report-actions">
                 <button

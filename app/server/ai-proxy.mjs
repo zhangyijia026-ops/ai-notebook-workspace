@@ -79,7 +79,7 @@ function buildOrganizeInput(body) {
     {
       role: 'system',
       content:
-        '你是一个中文个人知识管理助手。请把用户粘贴的内容解读成可沉淀的笔记素材。只输出严格 JSON，不要输出 Markdown 代码块或解释文字。JSON 字段必须是 title、summary、tags、recommendedNotebookId、extractedTodos。',
+        '你是一个中文个人知识管理助手。请把用户粘贴的内容解读成可沉淀的笔记素材。只输出严格 JSON，不要输出 Markdown 代码块或解释文字。JSON 字段必须是 title、summary、tags、recommendedNotebookId。',
     },
     {
       role: 'user',
@@ -88,11 +88,11 @@ function buildOrganizeInput(body) {
         '',
         '请完成：',
         '1. 解读内容，而不是只复述原文。',
-        '2. 生成一个适合作为笔记标题的中文短标题：必须抓住内容里的具体对象、结论、项目或主题；不要使用“摘录”“灵感”“未命名”“AI 对话”“工作记录”这类泛称；不要超过 18 个中文字符。',
+        '2. 生成一个适合作为笔记标题的中文短标题：必须抓住内容里的具体对象、结论或主题；不要使用“摘录”“灵感”“未命名”“AI 对话”“工作记录”这类泛称；不要超过 18 个中文字符。',
         '3. 判断应该归入哪个笔记本。',
         '4. 生成适合检索的中文标签。',
-        '5. 如果存在明确行动项，提取 Todo；没有明确行动项则返回空数组。',
-        '6. recommendedNotebookId 只能从这些值中选择：notebook_work、notebook_inspiration、notebook_ai_chats、notebook_xiaohongshu、notebook_reports、notebook_unsorted。',
+        '5. recommendedNotebookId 只能从这些值中选择：notebook_work、notebook_inspiration、notebook_ai_chats、notebook_xiaohongshu、notebook_reports、notebook_unsorted。',
+        '6. 不要提取 Todo，不要修改用户任务，只整理笔记本归类、摘要和标签。',
         '',
         '内容：',
         String(body.content || '').slice(0, 12000),
@@ -120,9 +120,7 @@ function buildReportInput(body) {
         '2. 内容要适合直接保存为个人工作笔记。',
         '3. 日报包含：今日完成、进行中、关键思考、明日计划。',
         '4. 周报包含：本周重点成果、关键进展、问题与风险、下周计划、灵感与素材。',
-        '5. 如果提供了项目汇总 projectReports，必须按项目分组输出；每个项目包含完成、进行中/待推进、关键记录、风险或下一步。',
         '',
-        `项目汇总：${JSON.stringify(body.input?.projectReports ?? [])}`,
         `已完成 Todo：${JSON.stringify(body.input?.completedTodos ?? [])}`,
         `未完成 Todo：${JSON.stringify(body.input?.pendingTodos ?? [])}`,
         `笔记重点：${JSON.stringify(body.input?.noteHighlights ?? [])}`,

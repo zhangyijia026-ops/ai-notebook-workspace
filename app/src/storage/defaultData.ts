@@ -1,4 +1,4 @@
-import type { AppData, Notebook, Project } from '../types/domain'
+import type { AppData, Notebook } from '../types/domain'
 
 const now = new Date().toISOString()
 
@@ -47,19 +47,7 @@ export const defaultNotebooks: Notebook[] = [
   },
 ]
 
-export const defaultProjects: Project[] = [
-  {
-    id: 'project_general',
-    name: '通用工作',
-    description: '未单独拆项目的工作内容',
-    status: 'active',
-    createdAt: now,
-    updatedAt: now,
-  },
-]
-
 export const defaultAppData: AppData = {
-  projects: defaultProjects,
   notebooks: defaultNotebooks,
   notes: [],
   todos: [],

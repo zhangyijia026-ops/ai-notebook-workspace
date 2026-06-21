@@ -3,3 +3,4 @@
 app/.env
 app/node_modules/
 app/dist/
+recovery/

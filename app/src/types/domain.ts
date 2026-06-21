@@ -6,21 +6,9 @@ export type Notebook = {
   updatedAt: string
 }
 
-export type ProjectStatus = 'active' | 'archived'
-
-export type Project = {
-  id: string
-  name: string
-  description?: string
-  status: ProjectStatus
-  createdAt: string
-  updatedAt: string
-}
-
 export type Note = {
   id: string
   notebookId: string
-  projectId?: string
   title: string
   content: string
   summary?: string
@@ -38,7 +26,6 @@ export type Todo = {
   title: string
   status: TodoStatus
   priority: TodoPriority
-  projectId?: string
   dueDate?: string
   sourceNoteId?: string
   sourceNoteLineKey?: string
@@ -60,7 +47,6 @@ export type Clip = {
   id: string
   source: ClipSource
   sourceUrl?: string
-  projectId?: string
   title?: string
   rawContent: string
   summary?: string
@@ -71,7 +57,6 @@ export type Clip = {
 }
 
 export type AppData = {
-  projects: Project[]
   notebooks: Notebook[]
   notes: Note[]
   todos: Todo[]

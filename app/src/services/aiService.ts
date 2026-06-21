@@ -3,7 +3,6 @@ export type AiOrganizeResult = {
   summary: string
   tags: string[]
   recommendedNotebookId?: string
-  extractedTodos: string[]
 }
 
 export type AiReportResult = {
@@ -12,15 +11,6 @@ export type AiReportResult = {
 }
 
 export type AiReportInput = {
-  completedTodos: string[]
-  pendingTodos: string[]
-  noteHighlights: string[]
-  clipHighlights: string[]
-  projectReports?: AiProjectReportInput[]
-}
-
-export type AiProjectReportInput = {
-  projectName: string
   completedTodos: string[]
   pendingTodos: string[]
   noteHighlights: string[]
@@ -111,7 +101,10 @@ function buildSuggestedTitle(content: string, source: AiOrganizeSource) {
   return prefix ? `${prefix}：${trimmedTitle}` : trimmedTitle
 }
 
-async function organizeContentWithMock(content: string, source: AiOrganizeSource = 'manual'): Promise<AiOrganizeResult> {
+async function organizeContentWithMock(
+  content: string,
+  source: AiOrganizeSource = 'manual',
+): Promise<AiOrganizeResult> {
   const normalizedContent = content.trim()
   const sourceConfig: Record<AiOrganizeSource, Pick<AiOrganizeResult, 'tags' | 'recommendedNotebookId'>> = {
     xiaohongshu: {
@@ -150,7 +143,6 @@ async function organizeContentWithMock(content: string, source: AiOrganizeSource
     summary: buildInterpretation(normalizedContent, source),
     tags: config.tags,
     recommendedNotebookId: config.recommendedNotebookId,
-    extractedTodos: normalizedContent ? ['根据这段内容整理下一步行动'] : [],
   }
 }
 
@@ -162,61 +154,12 @@ function formatList(items: string[], fallback: string) {
   return items.map((item, index) => `${index + 1}. ${item}`).join('\n')
 }
 
-function formatProjectSections(projectReports: AiProjectReportInput[], type: 'daily' | 'weekly') {
-  if (projectReports.length === 0) {
-    return ''
-  }
-
-  return projectReports
-    .map((project) =>
-      [
-        `## ${project.projectName}`,
-        type === 'daily' ? '今日完成：' : '本周完成：',
-        formatList(project.completedTodos, '暂无已完成 Todo。'),
-        '',
-        type === 'daily' ? '进行中：' : '关键待推进：',
-        formatList(project.pendingTodos, '暂无进行中 Todo。'),
-        '',
-        '关键记录：',
-        formatList([...project.noteHighlights, ...project.clipHighlights].slice(0, 6), '暂无笔记或摘录沉淀。'),
-      ].join('\n'),
-    )
-    .join('\n\n')
-}
-
 async function generateReportWithMock(type: 'daily' | 'weekly', input?: AiReportInput): Promise<AiReportResult> {
   const title = type === 'daily' ? '今日日报草稿' : '本周周报草稿'
   const completedTodos = input?.completedTodos ?? []
   const pendingTodos = input?.pendingTodos ?? []
   const noteHighlights = input?.noteHighlights ?? []
   const clipHighlights = input?.clipHighlights ?? []
-  const projectReports = input?.projectReports ?? []
-  const projectContent = formatProjectSections(projectReports, type)
-
-  if (projectContent) {
-    return {
-      title,
-      content:
-        type === 'daily'
-          ? [
-              '按项目汇总：',
-              '',
-              projectContent,
-              '',
-              '明日计划：',
-              formatList(pendingTodos.slice(0, 8), '根据各项目未完成事项补充明日计划。'),
-            ].join('\n')
-          : [
-              '按项目汇总：',
-              '',
-              projectContent,
-              '',
-              '下周计划：',
-              formatList(pendingTodos.slice(0, 10), '根据各项目未完成事项补充下周计划。'),
-            ].join('\n'),
-    }
-  }
-
   return {
     title,
     content:
@@ -253,7 +196,10 @@ async function generateReportWithMock(type: 'daily' | 'weekly', input?: AiReport
   }
 }
 
-export async function organizeContent(content: string, source: AiOrganizeSource = 'manual'): Promise<AiOrganizeResult> {
+export async function organizeContent(
+  content: string,
+  source: AiOrganizeSource = 'manual',
+): Promise<AiOrganizeResult> {
   if (aiMode === 'real') {
     try {
       return await organizeWithRealAi(content, source)
